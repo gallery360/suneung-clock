@@ -99,6 +99,8 @@
   .row label.sw{flex:0 0 51px}
   .snd>label{white-space:nowrap;flex:0 0 auto}
   .row small{color:var(--sub);display:block;font-size:13px;margin-top:2px}
+  .chip{border:1px solid var(--line);background:var(--chip);border-radius:18px;padding:8px 14px;font-size:16px;cursor:pointer}
+  .chip.sel{background:var(--btn);color:var(--btnInk);border-color:var(--btn)}
   .preset{cursor:pointer;width:100%;border:0;background:none;text-align:left;font-size:17px}
   .preset.sel{background:var(--chip)}
   .preset .t{color:var(--sub);font-variant-numeric:tabular-nums;font-size:15px}
@@ -151,6 +153,13 @@
 <div id="sheet">
   <div id="pgExam">
     <div class="sheetHead"><h2>시험 선택</h2><button class="close" data-close>닫기</button></div>
+    <h3>타이머 (빨간 원판)</h3>
+    <div class="list">
+      <div class="row" style="flex-wrap:wrap;gap:8px" id="timerChips"></div>
+      <div class="row"><label>직접 입력<small>빨간 부분이 남은 시간이에요. 60분 넘으면 눈금이 120분으로 바뀌어요</small></label>
+        <span style="display:flex;gap:6px;align-items:center"><input type="number" id="tH" value="0" min="0" max="9" inputmode="numeric" style="width:56px">시간 <input type="number" id="tM" value="30" min="0" max="59" inputmode="numeric" style="width:64px">분</span></div>
+      <div class="row"><label></label><button class="btn primary" id="tApply" style="height:42px">타이머로 설정</button></div>
+    </div>
     <h3>실제 수능 시간표</h3>
     <div class="list" id="presetList"></div>
     <h3>직접 정하기</h3>
@@ -278,6 +287,40 @@ const gM=el('g',{}); el('line',{x1:200,y1:214,x2:200,y2:58,stroke:'#111','stroke
 const gS=el('g',{}); el('line',{x1:200,y1:232,x2:200,y2:48,stroke:'var(--red)','stroke-width':2.6,'stroke-linecap':'round'},gS);
 el('circle',{cx:200,cy:200,r:9,fill:'var(--red)'});
 el('circle',{cx:200,cy:200,r:3.5,fill:'#111'});
+// wrap the exam clock into its own group
+const gClock=document.createElementNS(NS,'g'); while(svg.firstChild) gClock.appendChild(svg.firstChild); svg.appendChild(gClock);
+
+/* ---------- visual timer face (timer mode) ---------- */
+const gTimer=el('g',{style:'display:none'});
+el('circle',{cx:200,cy:200,r:190,fill:'var(--rim)'},gTimer);
+el('circle',{cx:200,cy:200,r:176,fill:'#f6f6f8'},gTimer);
+const gDial=el('g',{},gTimer);
+const wedge=el('path',{d:'',fill:'#d9262c'},gTimer);
+const knobTab=el('line',{x1:200,y1:200,x2:200,y2:150,stroke:'#fff','stroke-width':14,'stroke-linecap':'round'},gTimer);
+el('circle',{cx:200,cy:200,r:20,fill:'#fff',stroke:'rgba(0,0,0,.12)','stroke-width':1.5},gTimer);
+let dialScale=0;
+function buildDial(scale){
+  if(scale===dialScale) return; dialScale=scale; gDial.innerHTML='';
+  const step=scale/12;
+  for(let i=0;i<60;i++){                       // tick marks, counter-clockwise from top
+    const big=i%5===0, a=-i*6*Math.PI/180, r1=171, r2=big?156:164;
+    el('line',{x1:200+r1*Math.sin(a), y1:200-r1*Math.cos(a), x2:200+r2*Math.sin(a), y2:200-r2*Math.cos(a),
+      stroke:'#222','stroke-width':big?3.5:1.6},gDial);
+  }
+  for(let k=0;k<12;k++){
+    const a=-k*30*Math.PI/180, r=129, v=k*step;
+    const t=el('text',{x:200+r*Math.sin(a), y:200-r*Math.cos(a)+1,'text-anchor':'middle','dominant-baseline':'central',
+      'font-size':v>=100?26:30,'font-weight':700,fill:'#222','font-family':'-apple-system,"Helvetica Neue",Arial,sans-serif'},gDial);
+    t.textContent=v;
+  }
+}
+const WR=106;
+function drawWedge(remMs){
+  const span=Math.min(359.99, remMs/60000/dialScale*360);
+  const a=-span*Math.PI/180, x=200+WR*Math.sin(a), y=200-WR*Math.cos(a);
+  wedge.setAttribute('d', span<=0.01 ? '' : `M200 200 L200 ${200-WR} A${WR} ${WR} 0 ${span>180?1:0} 0 ${x} ${y} Z`);
+  knobTab.setAttribute('transform',`rotate(${-span} 200 200)`);
+}
 
 function sizeClock(){
   const portrait = innerHeight > innerWidth;
@@ -295,7 +338,9 @@ function render(){
   let e = elapsed();
   if(running && e >= durMs()){ e=durMs(); checkAlerts(e); finish(); }
   else checkAlerts(e);
-  const tSec = startSec() + e/1000;                 // virtual exam-clock time
+  const nowD=new Date(), realSec=nowD.getHours()*3600+nowD.getMinutes()*60+nowD.getSeconds()+nowD.getMilliseconds()/1000;
+  const isTimer=!!S.exam.timer;
+  const tSec = isTimer ? realSec : startSec() + e/1000;   // timer: real time / exam: virtual exam-clock time
   const sec = S.smooth ? (tSec%60) : Math.floor(tSec%60);
   const min = (tSec/60)%60, hr=(tSec/3600)%12;
   gS.setAttribute('transform',`rotate(${sec*6} 200 200)`);
@@ -304,7 +349,9 @@ function render(){
 
   const rem = Math.max(0, durMs()-e), rs=Math.ceil(rem/1000);
   $('#remain').textContent = rs>=3600 ? `${Math.floor(rs/3600)}:${pad(Math.floor(rs/60)%60)}:${pad(rs%60)}` : `${pad(Math.floor(rs/60))}:${pad(rs%60)}`;
-  $('#endT').textContent = hm(startSec()+S.exam.dur*60);
+  $('#endT').textContent = isTimer ? hm(Math.floor(realSec + rem/1000)) : hm(startSec()+S.exam.dur*60);
+  gClock.style.display=isTimer?'none':''; gTimer.style.display=isTimer?'':'none';
+  if(isTimer){ buildDial(S.exam.dur<=60?60:Math.ceil(S.exam.dur/60)*60); drawWedge(rem); }
   $('#readout').classList.toggle('ended', ended);
   const d=new Date(), W='일월화수목금토';
   $('#now').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${W[d.getDay()]})   ${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -538,12 +585,24 @@ $('#realClear').onclick=async()=>{
 };
 $('#cSlot').innerHTML=Object.entries(SLOTS).map(([k,v])=>`<option value="${k}" ${k==='inq2'?'selected':''}>${v}</option>`).join('');
 
+/* ---------- timer mode ---------- */
+function timerName(m){ return '타이머 '+(m>=60?Math.floor(m/60)+'시간'+(m%60?' '+(m%60)+'분':''):m+'분'); }
+function setTimer(m){ m=Math.max(1,Math.min(600,m|0)); setExam({name:timerName(m), start:'00:00', dur:m, timer:true, slot:$('#cSlot').value||'inq2'}); closeSheet(); }
+function buildTimerChips(){
+  const box=$('#timerChips'); box.innerHTML='';
+  [5,10,15,20,30,40,45,50,60,80,90,100].forEach(m=>{
+    const b=document.createElement('button'); b.className='chip'+(S.exam.timer&&S.exam.dur===m?' sel':''); b.textContent=m>=60&&m%60===0?(m/60)+'시간':m+'분';
+    b.onclick=()=>setTimer(m); box.appendChild(b);
+  });
+}
+$('#tApply').onclick=()=>setTimer((parseInt($('#tH').value,10)||0)*60+(parseInt($('#tM').value,10)||0));
+
 /* ---------- settings UI ---------- */
 function buildPresets(){
   const box=$('#presetList'); box.innerHTML='';
   PRESETS.forEach(p=>{
     const end=hm(startSecOf(p.start)+p.dur*60);
-    const b=document.createElement('button'); b.className='row preset'+(S.exam.name===p.name&&S.exam.start===p.start?' sel':'');
+    const b=document.createElement('button'); b.className='row preset'+(!S.exam.timer&&S.exam.name===p.name&&S.exam.start===p.start?' sel':'');
     b.innerHTML=`<span>${p.tag} · ${p.name}</span><span class="t">${p.start}–${end} (${p.dur}분)</span>`;
     b.onclick=()=>{ setExam({name:p.name,start:p.start,dur:p.dur,slot:p.slot}); closeSheet(); };
     box.appendChild(b);
@@ -567,7 +626,7 @@ function buildSounds(){
   });
 }
 function openSheet(pg){ $('#pgExam').classList.toggle('hide',pg!=='exam'); $('#pgSet').classList.toggle('hide',pg!=='set');
-  if(pg==='exam') buildPresets(); else { buildSounds(); showRealInfo(); }
+  if(pg==='exam') { buildPresets(); buildTimerChips(); } else { buildSounds(); showRealInfo(); }
   document.body.classList.add('open'); $('#sheet').scrollTop=0; }
 function closeSheet(){ document.body.classList.remove('open'); }
 $('#sheetBg').onclick=closeSheet; $$('[data-close]').forEach(b=>b.onclick=closeSheet);
