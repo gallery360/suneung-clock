@@ -1,0 +1,1 @@
+{"name":"수능 시계","short_name":"수능시계","start_url":"./","scope":"./","display":"standalone","orientation":"any","background_color":"#ffffff","theme_color":"#f4f8f8","lang":"ko","icons":[{"src":"icon-180.png","sizes":"180x180","type":"image/png"},{"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"}]}

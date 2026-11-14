@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>수능 시계</title>
+<meta name="description" content="수능 스타일 아날로그 시험 타이머 (종소리 포함)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="수능시계">
+<meta name="theme-color" content="#f4f8f8">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<style>
+  :root{
+    --bg:#ffffff; --bar:#f4f8f8; --ink:#1b1b1b; --sub:#6b6b6b; --line:#e3e3e3;
+    --face:#ededed; --rim:#1d1d1d; --red:#d9262c; --btn:#1b1b1b; --btnInk:#fff;
+    --sheet:#ffffff; --chip:#f1f3f3;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#121212; --bar:#1a1d1d; --ink:#f1f1f1; --sub:#a0a0a0; --line:#2c2c2c;
+      --face:#e9e9e9; --rim:#000; --btn:#f1f1f1; --btnInk:#111; --sheet:#1c1c1c; --chip:#262929;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#121212; --bar:#1a1d1d; --ink:#f1f1f1; --sub:#a0a0a0; --line:#2c2c2c;
+    --face:#e9e9e9; --rim:#000; --btn:#f1f1f1; --btnInk:#111; --sheet:#1c1c1c; --chip:#262929;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    -webkit-user-select:none;user-select:none;overflow:hidden}
+  button{font:inherit;color:inherit}
+  header{position:fixed;top:0;left:0;right:0;height:calc(56px + env(safe-area-inset-top));
+    padding-top:env(safe-area-inset-top);background:var(--bar);display:flex;align-items:center;
+    justify-content:center;z-index:5;transition:opacity .25s}
+  #title{border:0;background:none;font-size:22px;padding:8px 14px;border-radius:10px;cursor:pointer}
+  #title::after{content:" ▾";font-size:14px;color:var(--sub)}
+  .hbtn{position:absolute;top:calc(env(safe-area-inset-top) + 8px);width:40px;height:40px;border:0;
+    background:none;border-radius:20px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .hbtn svg{width:24px;height:24px}
+  #btnSettings{right:calc(10px + env(safe-area-inset-right))}
+  #btnFocus{left:calc(10px + env(safe-area-inset-left))}
+  main{position:absolute;inset:calc(56px + env(safe-area-inset-top)) 0 0 0;display:flex;
+    align-items:center;justify-content:center;gap:4vw;padding:16px calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left))}
+  #panel{display:flex;flex-direction:column;align-items:center;gap:18px;min-width:260px}
+  .readout{display:grid;grid-template-columns:auto auto;column-gap:28px;row-gap:6px;align-items:baseline}
+  .readout .k{font-size:30px;text-align:right}
+  .readout .v{font-size:36px;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+  #remain{font-weight:700}
+  .readout.ended #remain{color:var(--red)}
+  .btns{display:flex;gap:16px}
+  .btn{height:52px;padding:0 28px;border-radius:26px;border:1.5px solid var(--line);background:none;
+    font-size:18px;display:flex;align-items:center;gap:10px;cursor:pointer}
+  .btn.primary{background:var(--btn);color:var(--btnInk);border-color:var(--btn)}
+  .btn:disabled{opacity:.4}
+  #now{color:var(--sub);font-size:19px;font-variant-numeric:tabular-nums}
+  #status{font-size:15px;color:var(--red);min-height:20px;text-align:center}
+  #clockWrap{flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+  #clock{display:block}
+  .hide{display:none!important}
+  /* layout: landscape = side by side, portrait = stacked */
+  @media (orientation:portrait){
+    main{flex-direction:column-reverse;justify-content:center;gap:28px}
+  }
+  body.focus header{opacity:0;pointer-events:none}
+  body.focus main{inset:0}
+  body.focus .btns, body.focus #status{display:none}
+  /* sheet */
+  #sheetBg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:20;display:none}
+  #sheet{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(560px,100%);
+    max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--sheet);
+    border-radius:18px 18px 0 0;z-index:21;display:none;padding:8px 18px calc(24px + env(safe-area-inset-bottom));
+    -webkit-user-select:text;user-select:text}
+  .open #sheetBg,.open #sheet{display:block}
+  .sheetHead{position:sticky;top:-8px;background:var(--sheet);display:flex;justify-content:space-between;
+    align-items:center;padding:12px 0;z-index:1}
+  .sheetHead h2{margin:0;font-size:20px}
+  .close{border:0;background:var(--chip);border-radius:16px;padding:8px 16px;cursor:pointer;font-size:16px}
+  h3{font-size:15px;color:var(--sub);margin:22px 0 8px;font-weight:600}
+  .list{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;
+    border-top:1px solid var(--line);min-height:50px}
+  .row:first-child{border-top:0}
+  .row label{flex:1}
+  .row label.sw{flex:0 0 51px}
+  .snd>label{white-space:nowrap;flex:0 0 auto}
+  .row small{color:var(--sub);display:block;font-size:13px;margin-top:2px}
+  .preset{cursor:pointer;width:100%;border:0;background:none;text-align:left;font-size:17px}
+  .preset.sel{background:var(--chip)}
+  .preset .t{color:var(--sub);font-variant-numeric:tabular-nums;font-size:15px}
+  select,input[type=time],input[type=number],input[type=text]{font:inherit;font-size:16px;padding:6px 8px;
+    border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+  input[type=number]{width:80px}
+  input[type=text]{width:150px}
+  .mini{border:1px solid var(--line);background:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px;white-space:nowrap}
+  .sw{position:relative;width:51px;height:31px;flex:0 0 auto}
+  .sw input{opacity:0;width:0;height:0;position:absolute}
+  .sw span{position:absolute;inset:0;background:#c9c9c9;border-radius:16px;transition:.2s;cursor:pointer}
+  .sw span::before{content:"";position:absolute;width:27px;height:27px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  .sw input:checked+span{background:#34c759}
+  .sw input:checked+span::before{transform:translateX(20px)}
+  .snd{flex-wrap:wrap}
+  .snd .ctl{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .fname{font-size:12px;color:var(--sub);width:100%;text-align:right}
+  .note{font-size:13px;color:var(--sub);line-height:1.55;margin:10px 2px}
+  input[type=range]{width:160px}
+</style>
+</head>
+<body>
+<header>
+  <button class="hbtn" id="btnFocus" aria-label="집중 모드">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+  </button>
+  <button id="title">시험 선택</button>
+  <button class="hbtn" id="btnSettings" aria-label="설정">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+</header>
+
+<main>
+  <section id="panel">
+    <div class="readout" id="readout">
+      <span class="k" data-r="end">종료</span><span class="v" id="endT" data-r="end">--:--</span>
+      <span class="k" data-r="remain">남음</span><span class="v" id="remain" data-r="remain">--:--</span>
+    </div>
+    <div class="btns">
+      <button class="btn primary" id="btnStart"><span id="startIcon">▶</span> <span id="startLbl">시작</span></button>
+      <button class="btn" id="btnReset">↻ 초기화</button>
+    </div>
+    <div id="now" data-r="now"></div>
+    <div id="status"></div>
+  </section>
+  <div id="clockWrap"><svg id="clock" viewBox="0 0 400 400" aria-label="아날로그 시계"></svg></div>
+</main>
+
+<div id="sheetBg"></div>
+<div id="sheet">
+  <div id="pgExam">
+    <div class="sheetHead"><h2>시험 선택</h2><button class="close" data-close>닫기</button></div>
+    <h3>실제 수능 시간표</h3>
+    <div class="list" id="presetList"></div>
+    <h3>직접 정하기</h3>
+    <div class="list">
+      <div class="row"><label>과목 이름</label><input type="text" id="cName" value="모의 시험"></div>
+      <div class="row"><label>시작 시각<small>시계가 이 시각부터 움직여요</small></label>
+        <div class="ctl" style="display:flex;gap:6px"><input type="time" id="cStart" value="16:07"><button class="mini" id="cNow">지금</button></div></div>
+      <div class="row"><label>시험 시간 (분)</label><input type="number" id="cDur" value="30" min="1" max="300" inputmode="numeric"></div>
+      <div class="row"><label>방송 소리<small>수능 방송 파일을 불러왔을 때 쓸 교시</small></label><select id="cSlot"></select></div>
+      <div class="row"><label></label><button class="btn primary" id="cApply" style="height:42px">이 시간으로 설정</button></div>
+    </div>
+    <p class="note">시계는 실제 시험처럼 <b>시작 시각</b>(예: 16:07)에서 출발해 종료 시각(16:37)까지 움직여요. '지금'을 누르면 현재 실제 시각으로 맞춰집니다.</p>
+  </div>
+
+  <div id="pgSet">
+    <div class="sheetHead"><h2>설정</h2><button class="close" data-close>닫기</button></div>
+    <h3>숫자 표시 (전자시계)</h3>
+    <div class="list">
+      <div class="row"><label>종료 시각</label><label class="sw"><input type="checkbox" data-show="end"><span></span></label></div>
+      <div class="row"><label>남은 시간</label><label class="sw"><input type="checkbox" data-show="remain"><span></span></label></div>
+      <div class="row"><label>현재 날짜·시각</label><label class="sw"><input type="checkbox" data-show="now"><span></span></label></div>
+    </div>
+
+    <h3>실제 수능 방송 소리</h3>
+    <div class="list">
+      <div class="row"><label>방송 파일 불러오기<small id="realInfo">zip 파일 하나 또는 mp3 여러 개를 고르세요</small></label>
+        <span style="display:flex;gap:6px"><button class="mini" id="realImport">불러오기</button><button class="mini hide" id="realClear">지우기</button></span></div>
+    </div>
+    <p class="note">받은 수능 방송 파일(zip)을 아이폰 '파일' 앱에 저장한 뒤 여기서 한 번만 불러오면 이 기기에 저장돼요. 과목마다 실제 본령, 종료 10분 전 또는 5분 전 안내, 종료령이 자동으로 연결됩니다. 실제 수능처럼 국어·수학·영어·제2외국어는 10분 전, 한국사·탐구는 5분 전 방송이 있고, 방송이 없는 5분 전에는 음성 안내가 대신 나와요.</p>
+    <h3>종소리</h3>
+    <div class="list" id="soundList"></div>
+    <div class="list" style="margin-top:10px">
+      <div class="row"><label>안내 음성<small>"시험 종료 5분 전입니다" 같은 목소리 안내</small></label><label class="sw"><input type="checkbox" id="voice"><span></span></label></div>
+      <div class="row"><label>음량</label><input type="range" id="vol" min="0" max="1" step="0.05"></div>
+    </div>
+    <p class="note">실제 수능 방송 녹음은 저작권 때문에 넣지 않고 비슷한 차임을 직접 만들었어요. 진짜 수능 소리 파일(mp3, m4a 등)이 있으면 각 항목에서 <b>내 파일</b>을 골라 올리면 그 소리가 울려요. 올린 파일은 이 기기에만 저장됩니다.</p>
+
+    <h3>시계</h3>
+    <div class="list">
+      <div class="row"><label>초침 부드럽게<small>끄면 실제 벽시계처럼 1초씩 째깍</small></label><label class="sw"><input type="checkbox" id="smooth"><span></span></label></div>
+      <div class="row"><label>화면</label><select id="theme"><option value="auto">자동</option><option value="light">밝게</option><option value="dark">어둡게</option></select></div>
+    </div>
+    <p class="note">⚠️ 아이폰 화면이 꺼지거나 다른 앱으로 넘어가면 소리가 안 날 수 있어요. 시험 중에는 이 화면을 켜 두세요 (가능한 기기에서는 자동으로 화면 꺼짐을 막아요). 무음 스위치가 켜져 있으면 일부 기기에서 소리가 안 날 수 있으니 확인해 주세요.<br>📱 설치: Safari에서 열고 공유 버튼 → <b>홈 화면에 추가</b>.</p>
+  </div>
+</div>
+<input type="file" id="filePick" accept="audio/*" class="hide">
+<input type="file" id="realPick" accept=".zip,application/zip,audio/*" multiple class="hide">
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+
+/* ---------- presets: 수능 시간표 ---------- */
+const PRESETS = [
+  {name:'국어', tag:'1교시', start:'08:40', dur:80, slot:'p1'},
+  {name:'수학', tag:'2교시', start:'10:30', dur:100, slot:'p2'},
+  {name:'영어', tag:'3교시', start:'13:10', dur:70, slot:'p3'},
+  {name:'한국사', tag:'4교시', start:'14:50', dur:30, slot:'hist'},
+  {name:'탐구 (제1선택)', tag:'4교시', start:'15:35', dur:30, slot:'inq1'},
+  {name:'탐구 (제2선택)', tag:'4교시', start:'16:07', dur:30, slot:'inq2'},
+  {name:'제2외국어/한문', tag:'5교시', start:'17:05', dur:40, slot:'p5'},
+];
+const SLOTS = {p1:'1교시 국어', p2:'2교시 수학', p3:'3교시 영어', hist:'4교시 한국사', inq1:'4교시 탐구 첫째', inq2:'4교시 탐구 둘째', p5:'5교시 제2외국어'};
+const EVENTS = [
+  {key:'start', label:'시작 (본령)', voice:'시험을 시작하십시오.'},
+  {key:'m10',  label:'종료 10분 전', voice:'시험 종료 10분 전입니다.', before:10},
+  {key:'m5',   label:'종료 5분 전', voice:'시험 종료 5분 전입니다.', before:5},
+  {key:'end',  label:'종료', voice:'시험이 종료되었습니다. 필기구를 내려놓으십시오.'},
+];
+const SOUNDS = [
+  ['real','수능 방송 (실제)'],
+  ['chime4','차임 (딩동댕동)'],
+  ['chime3','안내 차임 (딩동댕)'],
+  ['bell','전자 벨 (따르릉)'],
+  ['beep','삐- 삐- 삐-'],
+  ['custom','내 파일…'],
+  ['none','소리 없음'],
+];
+
+/* ---------- settings ---------- */
+const DEF = {
+  exam:{name:'탐구 (제2선택)', start:'16:07', dur:30, slot:'inq2'},
+  show:{end:true, remain:true, now:true},
+  snd:{start:'chime3', m10:'none', m5:'chime4', end:'chime4'},
+  voice:true, vol:0.9, smooth:false, theme:'auto', files:{}, real:[]
+};
+let S = load();
+function load(){
+  try{ const o = JSON.parse(localStorage.getItem('suneungClock')||'null');
+    if(o) return Object.assign({}, DEF, {real:[]}, o, {show:Object.assign({},DEF.show,o.show), snd:Object.assign({},DEF.snd,o.snd)});
+  }catch(e){}
+  return JSON.parse(JSON.stringify(DEF));
+}
+function save(){ try{ localStorage.setItem('suneungClock', JSON.stringify(S)); }catch(e){} }
+
+/* ---------- timer state ---------- */
+let running=false, acc=0, runStart=0, lastEl=0, ended=false, wakeLock=null;
+const durMs = () => S.exam.dur*60000;
+const startSec = () => { const [h,m]=S.exam.start.split(':').map(Number); return h*3600+m*60; };
+const elapsed = () => running ? acc + (Date.now()-runStart) : acc;
+const pad = n => String(n).padStart(2,'0');
+const hm = sec => { sec=((sec%86400)+86400)%86400; return pad(Math.floor(sec/3600))+':'+pad(Math.floor(sec/60)%60); };
+
+/* ---------- clock face ---------- */
+const NS='http://www.w3.org/2000/svg';
+function el(tag, attrs, parent){ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); (parent||svg).appendChild(e); return e; }
+const svg = $('#clock');
+el('circle',{cx:200,cy:200,r:190,fill:'var(--rim)'});
+el('circle',{cx:200,cy:200,r:176,fill:'var(--face)'});
+for(let i=0;i<60;i++){
+  const big=i%5===0, a=i*6*Math.PI/180, r1=171, r2=big?150:161;
+  el('line',{x1:200+r1*Math.sin(a), y1:200-r1*Math.cos(a), x2:200+r2*Math.sin(a), y2:200-r2*Math.cos(a),
+    stroke:'#111','stroke-width':big?5:2.2,'stroke-linecap':'butt'});
+}
+for(let n=1;n<=12;n++){
+  const a=n*30*Math.PI/180, r=124;
+  const t=el('text',{x:200+r*Math.sin(a), y:200-r*Math.cos(a)+1, 'text-anchor':'middle','dominant-baseline':'central',
+    'font-size':40,'font-weight':700,fill:'#111','font-family':'-apple-system,"Helvetica Neue",Arial,sans-serif'});
+  t.textContent=n;
+}
+const gH=el('g',{}); el('line',{x1:200,y1:212,x2:200,y2:112,stroke:'#111','stroke-width':9,'stroke-linecap':'round'},gH);
+const gM=el('g',{}); el('line',{x1:200,y1:214,x2:200,y2:58,stroke:'#111','stroke-width':6,'stroke-linecap':'round'},gM);
+const gS=el('g',{}); el('line',{x1:200,y1:232,x2:200,y2:48,stroke:'var(--red)','stroke-width':2.6,'stroke-linecap':'round'},gS);
+el('circle',{cx:200,cy:200,r:9,fill:'var(--red)'});
+el('circle',{cx:200,cy:200,r:3.5,fill:'#111'});
+
+function sizeClock(){
+  const portrait = innerHeight > innerWidth;
+  const top = 56 + 32;
+  const focus = document.body.classList.contains('focus');
+  let s;
+  if(portrait){ s = Math.min(innerWidth-32, (innerHeight-(focus?0:top)) * (panelVisible()?0.6:0.92)); }
+  else { s = Math.min(innerHeight-(focus?32:top), (innerWidth-32) * (panelVisible()?0.6:0.95)); }
+  s=Math.max(160,s); svg.setAttribute('width',s); svg.setAttribute('height',s);
+}
+function panelVisible(){ return !document.body.classList.contains('focus') || S.show.end || S.show.remain || S.show.now; }
+
+/* ---------- render ---------- */
+function render(){
+  let e = elapsed();
+  if(running && e >= durMs()){ e=durMs(); checkAlerts(e); finish(); }
+  else checkAlerts(e);
+  const tSec = startSec() + e/1000;                 // virtual exam-clock time
+  const sec = S.smooth ? (tSec%60) : Math.floor(tSec%60);
+  const min = (tSec/60)%60, hr=(tSec/3600)%12;
+  gS.setAttribute('transform',`rotate(${sec*6} 200 200)`);
+  gM.setAttribute('transform',`rotate(${min*6} 200 200)`);
+  gH.setAttribute('transform',`rotate(${hr*30} 200 200)`);
+
+  const rem = Math.max(0, durMs()-e), rs=Math.ceil(rem/1000);
+  $('#remain').textContent = rs>=3600 ? `${Math.floor(rs/3600)}:${pad(Math.floor(rs/60)%60)}:${pad(rs%60)}` : `${pad(Math.floor(rs/60))}:${pad(rs%60)}`;
+  $('#endT').textContent = hm(startSec()+S.exam.dur*60);
+  $('#readout').classList.toggle('ended', ended);
+  const d=new Date(), W='일월화수목금토';
+  $('#now').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${W[d.getDay()]})   ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  requestAnimationFrame(render);
+}
+
+function applyShow(){
+  for(const k of ['end','remain','now']) $$(`[data-r="${k}"]`).forEach(n=>n.classList.toggle('hide',!S.show[k]));
+  $('#readout').classList.toggle('hide', !S.show.end && !S.show.remain);
+  $('#panel').classList.toggle('hide', !panelVisible());
+  sizeClock();
+}
+function applyTheme(){ if(S.theme==='auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme=S.theme; }
+function updateButtons(){
+  $('#startIcon').textContent = running ? '❚❚' : '▶';
+  $('#startLbl').textContent = running ? '일시정지' : (acc>0 && !ended ? '계속' : '시작');
+  $('#btnStart').disabled = ended;
+  $('#title').textContent = S.exam.name;
+}
+
+/* ---------- alerts ---------- */
+function alertTimes(){
+  const list=[{key:'end',at:durMs()}];
+  for(const ev of EVENTS) if(ev.before && S.exam.dur>ev.before) list.push({key:ev.key, at:durMs()-ev.before*60000});
+  return list;
+}
+function checkAlerts(e){
+  if(!running) { lastEl=e; return; }
+  for(const a of alertTimes()){
+    if(lastEl < a.at && e >= a.at){
+      if(e - a.at < 30000) fire(a.key);   // skip if we were asleep long past it
+    }
+  }
+  lastEl=e;
+}
+function setStatus(t){ $('#status').textContent=t||''; }
+
+/* ---------- audio ---------- */
+let ctx=null, master=null;
+const buffers={};  // key -> AudioBuffer (custom files)
+function ensureAudio(){
+  try{ if(navigator.audioSession) navigator.audioSession.type='playback'; }catch(e){}
+  if(!ctx){
+    const AC=window.AudioContext||window.webkitAudioContext; ctx=new AC();
+    master=ctx.createGain(); master.connect(ctx.destination);
+    for(const k in S.files) loadCustom(k);
+    setTimeout(preloadReal,0);
+  }
+  master.gain.value=S.vol;
+  if(ctx.state!=='running') ctx.resume();
+  // unlock: silent buffer
+  const b=ctx.createBuffer(1,1,22050), s=ctx.createBufferSource(); s.buffer=b; s.connect(ctx.destination); s.start(0);
+  try{ if('speechSynthesis' in window && !window._spoke){ const u=new SpeechSynthesisUtterance(' '); u.volume=0; speechSynthesis.speak(u); window._spoke=true; } }catch(e){}
+}
+function bellNote(t0, f, dur, gain){
+  const parts=[[1,1,1],[2.0,.45,.6],[3.01,.25,.4],[4.17,.16,.28],[5.43,.08,.2],[0.5,.2,1.2]];
+  for(const [m,a,dk] of parts){
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type='sine'; o.frequency.value=f*m;
+    g.gain.setValueAtTime(0,t0);
+    g.gain.linearRampToValueAtTime(gain*a,t0+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,t0+dur*dk);
+    o.connect(g); g.connect(master); o.start(t0); o.stop(t0+dur*dk+0.05);
+  }
+}
+function synth(kind){
+  const t=ctx.currentTime+0.05; let len=0;
+  const N={G4:392,A4:440,B4:493.88,C5:523.25,D5:587.33,E5:659.25,G5:783.99,C4:261.63,E4:329.63,F4:349.23};
+  if(kind==='chime4'){            // 딩동댕동 x2 (school chime)
+    const seq=['E5','C5','D5','G4', 'G4','D5','E5','C5'];
+    seq.forEach((n,i)=>bellNote(t+i*0.75+(i>=4?0.5:0), N[n], i===7?3.2:2.2, 0.32));
+    len=7*0.75+0.5+3;
+  }else if(kind==='chime3'){      // 딩동댕 (announcement)
+    ['C5','E5','G5'].forEach((n,i)=>bellNote(t+i*0.55,N[n],2.4,0.3)); len=1.1+2.4;
+  }else if(kind==='bell'){        // electric bell
+    const L=3.0, o=ctx.createOscillator(), g=ctx.createGain(), lfo=ctx.createOscillator(), lg=ctx.createGain();
+    o.type='square'; o.frequency.value=1150; lfo.type='square'; lfo.frequency.value=22;
+    lfo.connect(lg); lg.gain.value=0.07; lg.connect(g.gain);
+    const f=ctx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=2300; f.Q.value=1.2;
+    g.gain.setValueAtTime(0.08,t); g.gain.setValueAtTime(0.08,t+L); g.gain.linearRampToValueAtTime(0,t+L+0.05);
+    o.connect(f); f.connect(g); g.connect(master); o.start(t); lfo.start(t); o.stop(t+L+0.1); lfo.stop(t+L+0.1);
+    len=L+0.2;
+  }else if(kind==='beep'){
+    for(let i=0;i<3;i++){ const o=ctx.createOscillator(), g=ctx.createGain(); o.frequency.value=1000;
+      const s=t+i*0.7; g.gain.setValueAtTime(0,s); g.gain.linearRampToValueAtTime(.3,s+.01); g.gain.setValueAtTime(.3,s+.45); g.gain.linearRampToValueAtTime(0,s+.48);
+      o.connect(g); g.connect(master); o.start(s); o.stop(s+.5); }
+    len=2.0;
+  }
+  return len;
+}
+function playKey(key){
+  ensureAudio();
+  const kind=S.snd[key];
+  const playBuf=b=>{ const s=ctx.createBufferSource(); s.buffer=b; s.connect(master); s.start(); return b.duration; };
+  if(kind==='custom'){
+    if(buffers[key]) return {len:playBuf(buffers[key]), voiced:true};
+    return {len:synth('chime4')};
+  }
+  if(kind==='real'){
+    const rk=slot()+':'+key, b=realBuf[rk];
+    if(b) return {len:playBuf(b), voiced:true};
+    if(S.real.includes(rk)){ decodeReal(rk).then(b=>b&&playBuf(b)); return {len:0, voiced:true}; }
+    // no recording for this exam/event: real 수능 announces warnings by voice only
+    if(key==='m10') return {len:0, voiced:true, silent:true};
+    if(key==='m5') return {len:0};
+    return {len:synth('chime4')};
+  }
+  if(kind==='none') return {len:0};
+  return {len:synth(kind)};
+}
+const slot = () => S.exam.slot || (PRESETS.find(p=>p.name===S.exam.name)||{}).slot || 'inq2';
+const realBuf = {};
+async function decodeReal(rk){
+  if(realBuf[rk]) return realBuf[rk];
+  if(!ctx) return null;
+  try{ const ab=await idbGet('real:'+rk); if(!ab) return null; realBuf[rk]=await decode(ab); return realBuf[rk]; }catch(e){ return null; }
+}
+function preloadReal(){
+  if(!ctx) return;
+  const want=new Set(EVENTS.map(e=>slot()+':'+e.key));
+  for(const k in realBuf) if(!want.has(k)) delete realBuf[k];   // keep memory small
+  want.forEach(k=>{ if(S.real.includes(k)) decodeReal(k); });
+}
+function speak(text, delay){
+  if(!S.voice || !('speechSynthesis' in window)) return;
+  setTimeout(()=>{ try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text); u.lang='ko-KR'; u.rate=0.92; u.volume=Math.min(1,S.vol+0.1);
+    const v=speechSynthesis.getVoices().find(v=>/ko/i.test(v.lang)); if(v) u.voice=v;
+    speechSynthesis.speak(u);
+  }catch(e){} }, delay*1000);
+}
+function fire(key){
+  const ev=EVENTS.find(e=>e.key===key);
+  const r=playKey(key);
+  if(r.silent) return;
+  // recordings already include the announcement voice
+  if(!r.voiced) speak(ev.voice, r.len?Math.max(0,r.len-1.2):0);
+  if(key==='m10'||key==='m5') setStatus(ev.label);
+  if(key==='end') setStatus('시험 종료');
+}
+
+/* ---------- custom files in IndexedDB ---------- */
+function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open('suneungClock',1);
+  r.onupgradeneeded=()=>r.result.createObjectStore('files'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function idbPut(k,v){ const db=await idb(); return new Promise((res,rej)=>{ const tx=db.transaction('files','readwrite'); tx.objectStore('files').put(v,k); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+async function idbGet(k){ const db=await idb(); return new Promise((res,rej)=>{ const r=db.transaction('files').objectStore('files').get(k); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+function decode(ab){ return new Promise((res,rej)=>{ const p=ctx.decodeAudioData(ab.slice(0),res,rej); if(p&&p.then) p.then(res,rej); }); }
+async function loadCustom(key){
+  try{ const ab=await idbGet(key); if(ab){ if(!ctx) return; buffers[key]=await decode(ab); } }catch(e){}
+}
+let pickKey=null;
+$('#filePick').addEventListener('change', async ev=>{
+  const f=ev.target.files[0]; ev.target.value=''; if(!f||!pickKey) return;
+  ensureAudio();
+  try{
+    const ab=await f.arrayBuffer();
+    buffers[pickKey]=await decode(ab);
+    try{ await idbPut(pickKey, ab); }catch(e){}
+    S.files[pickKey]=f.name; S.snd[pickKey]='custom'; save(); buildSounds();
+  }catch(e){ alertMsg('이 파일은 재생할 수 없어요. mp3나 m4a 파일로 다시 시도해 주세요.'); }
+});
+function alertMsg(t){ setStatus(t); setTimeout(()=>setStatus(''),4000); }
+
+/* ---------- 수능 방송 파일 불러오기 ---------- */
+function parseBroadcast(name){
+  const b=name.normalize('NFC').split('/').pop().replace(/\s+/g,'');
+  if(!/\.(mp3|m4a|aac|wav)$/i.test(b) || b.startsWith('._')) return null;
+  let ev=null;
+  if(/본령/.test(b)) ev='start'; else if(/10분전/.test(b)) ev='m10'; else if(/5분전/.test(b)) ev='m5'; else if(/종료령/.test(b)) ev='end';
+  if(!ev) return null;
+  let sl=null;
+  if(/탐구/.test(b)) sl=/첫/.test(b)?'inq1':/둘/.test(b)?'inq2':null;
+  else if(/한국사/.test(b)) sl='hist';
+  else { const m=b.match(/(\d)교시/); if(m && 'p'+m[1] in SLOTS && m[1]!=='4') sl='p'+m[1]; }
+  return sl ? sl+':'+ev : null;
+}
+async function readZip(buf){
+  const dv=new DataView(buf), u8=new Uint8Array(buf), out=[];
+  let e=-1; for(let i=buf.byteLength-22;i>=Math.max(0,buf.byteLength-66000);i--) if(dv.getUint32(i,true)===0x06054b50){e=i;break;}
+  if(e<0) throw new Error('zip');
+  const n=dv.getUint16(e+10,true); let p=dv.getUint32(e+16,true);
+  const utf8=new TextDecoder('utf-8'); let kr=null; try{ kr=new TextDecoder('euc-kr'); }catch(x){}
+  for(let i=0;i<n;i++){
+    if(dv.getUint32(p,true)!==0x02014b50) break;
+    const flags=dv.getUint16(p+8,true), method=dv.getUint16(p+10,true), csize=dv.getUint32(p+20,true),
+      nlen=dv.getUint16(p+28,true), elen=dv.getUint16(p+30,true), clen=dv.getUint16(p+32,true), lo=dv.getUint32(p+42,true);
+    const nb=u8.subarray(p+46,p+46+nlen);
+    const name=(flags&0x800||!kr)?utf8.decode(nb):kr.decode(nb);
+    p+=46+nlen+elen+clen;
+    if(!parseBroadcast(name)) continue;
+    const ds=lo+30+dv.getUint16(lo+26,true)+dv.getUint16(lo+28,true);
+    const raw=buf.slice(ds,ds+csize);
+    let data;
+    if(method===0) data=raw;
+    else if(method===8){
+      if(typeof DecompressionStream==='undefined') throw new Error('inflate');
+      data=await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
+    } else continue;
+    out.push({name,data});
+  }
+  return out;
+}
+async function importBroadcast(files){
+  const info=$('#realInfo'); info.textContent='불러오는 중…';
+  try{
+    let items=[];
+    for(const f of files){
+      if(/\.zip$/i.test(f.name)) items=items.concat(await readZip(await f.arrayBuffer()));
+      else items.push({name:f.name, data:await f.arrayBuffer()});
+    }
+    const keys=new Set(S.real);
+    for(const it of items){ const k=parseBroadcast(it.name); if(!k) continue; await idbPut('real:'+k, it.data); delete realBuf[k]; keys.add(k); }
+    const added=items.filter(it=>parseBroadcast(it.name)).length;
+    if(!added){ info.textContent='수능 방송 파일을 찾지 못했어요 (파일 이름에 본령/종료령 등이 있어야 해요)'; return; }
+    S.real=[...keys]; for(const ev of EVENTS) S.snd[ev.key]='real'; save();
+    preloadReal(); buildSounds(); showRealInfo();
+  }catch(err){ info.textContent = err && err.message==='inflate' ? '이 기기에서는 zip을 풀 수 없어요. mp3 파일들을 직접 골라 주세요.' : '불러오지 못했어요. 다시 시도해 주세요.'; }
+}
+function showRealInfo(){
+  const n=S.real.length;
+  $('#realInfo').textContent = n ? `${n}개 방송 저장됨 · ${[...new Set(S.real.map(k=>SLOTS[k.split(':')[0]]))].length}개 교시` : 'zip 파일 하나 또는 mp3 여러 개를 고르세요';
+  $('#realClear').classList.toggle('hide', !n);
+}
+$('#realImport').onclick=()=>{ ensureAudio(); $('#realPick').click(); };
+$('#realPick').addEventListener('change', e=>{ const fs=[...e.target.files]; e.target.value=''; if(fs.length) importBroadcast(fs); });
+$('#realClear').onclick=async()=>{
+  try{ const db=await idb(); const tx=db.transaction('files','readwrite'); S.real.forEach(k=>tx.objectStore('files').delete('real:'+k)); }catch(e){}
+  for(const k in realBuf) delete realBuf[k];
+  S.real=[]; for(const ev of EVENTS) if(S.snd[ev.key]==='real') S.snd[ev.key]=DEF.snd[ev.key]; save(); buildSounds(); showRealInfo();
+};
+$('#cSlot').innerHTML=Object.entries(SLOTS).map(([k,v])=>`<option value="${k}" ${k==='inq2'?'selected':''}>${v}</option>`).join('');
+
+/* ---------- settings UI ---------- */
+function buildPresets(){
+  const box=$('#presetList'); box.innerHTML='';
+  PRESETS.forEach(p=>{
+    const end=hm(startSecOf(p.start)+p.dur*60);
+    const b=document.createElement('button'); b.className='row preset'+(S.exam.name===p.name&&S.exam.start===p.start?' sel':'');
+    b.innerHTML=`<span>${p.tag} · ${p.name}</span><span class="t">${p.start}–${end} (${p.dur}분)</span>`;
+    b.onclick=()=>{ setExam({name:p.name,start:p.start,dur:p.dur,slot:p.slot}); closeSheet(); };
+    box.appendChild(b);
+  });
+}
+function startSecOf(s){ const [h,m]=s.split(':').map(Number); return h*3600+m*60; }
+function buildSounds(){
+  const box=$('#soundList'); box.innerHTML='';
+  EVENTS.forEach(ev=>{
+    const row=document.createElement('div'); row.className='row snd';
+    const opts=SOUNDS.filter(([v])=>v!=='real'||S.real.length).map(([v,l])=>`<option value="${v}" ${S.snd[ev.key]===v?'selected':''}>${l}</option>`).join('');
+    row.innerHTML=`<label>${ev.label}</label><span class="ctl"><select>${opts}</select><button class="mini">▶ 듣기</button></span>`+
+      (S.snd[ev.key]==='custom'&&S.files[ev.key]?`<span class="fname">🎵 ${S.files[ev.key].replace(/[<>&]/g,'')}</span>`:'');
+    const sel=row.querySelector('select');
+    sel.onchange=()=>{
+      if(sel.value==='custom'){ pickKey=ev.key; $('#filePick').click(); sel.value=S.snd[ev.key]; return; }
+      S.snd[ev.key]=sel.value; save(); buildSounds();
+    };
+    row.querySelector('button').onclick=()=>{ ensureAudio(); fire(ev.key); };
+    box.appendChild(row);
+  });
+}
+function openSheet(pg){ $('#pgExam').classList.toggle('hide',pg!=='exam'); $('#pgSet').classList.toggle('hide',pg!=='set');
+  if(pg==='exam') buildPresets(); else { buildSounds(); showRealInfo(); }
+  document.body.classList.add('open'); $('#sheet').scrollTop=0; }
+function closeSheet(){ document.body.classList.remove('open'); }
+$('#sheetBg').onclick=closeSheet; $$('[data-close]').forEach(b=>b.onclick=closeSheet);
+$('#title').onclick=()=>openSheet('exam');
+$('#btnSettings').onclick=()=>openSheet('set');
+$('#cNow').onclick=()=>{ const d=new Date(); $('#cStart').value=pad(d.getHours())+':'+pad(d.getMinutes()); };
+$('#cApply').onclick=()=>{
+  const dur=Math.max(1,Math.min(300,parseInt($('#cDur').value,10)||30));
+  setExam({name:($('#cName').value||'모의 시험').slice(0,20), start:$('#cStart').value||'16:07', dur, slot:$('#cSlot').value}); closeSheet();
+};
+$$('[data-show]').forEach(c=>{ c.checked=S.show[c.dataset.show]; c.onchange=()=>{ S.show[c.dataset.show]=c.checked; save(); applyShow(); }; });
+$('#voice').checked=S.voice; $('#voice').onchange=e=>{ S.voice=e.target.checked; save(); };
+$('#vol').value=S.vol; $('#vol').oninput=e=>{ S.vol=+e.target.value; if(master) master.gain.value=S.vol; save(); };
+$('#smooth').checked=S.smooth; $('#smooth').onchange=e=>{ S.smooth=e.target.checked; save(); };
+$('#theme').value=S.theme; $('#theme').onchange=e=>{ S.theme=e.target.value; save(); applyTheme(); };
+
+function setExam(x){ S.exam=x; save(); reset(); preloadReal(); }
+
+/* ---------- controls ---------- */
+async function keepAwake(on){
+  try{
+    if(on && 'wakeLock' in navigator && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>wakeLock=null); }
+    if(!on && wakeLock){ await wakeLock.release(); wakeLock=null; }
+  }catch(e){}
+}
+function start(){
+  ensureAudio();
+  for(const k of Object.keys(S.files)) if(!buffers[k]) loadCustom(k);
+  if(ended) return;
+  if(running){ acc=elapsed(); running=false; keepAwake(false); setStatus('일시정지'); }
+  else{
+    const first = acc===0;
+    runStart=Date.now(); lastEl=acc; running=true; keepAwake(true); setStatus('');
+    if(first) fire('start');
+  }
+  updateButtons();
+}
+function finish(){ running=false; ended=true; acc=durMs(); updateButtons(); keepAwake(false); }
+function reset(){ running=false; ended=false; acc=0; lastEl=0; setStatus(''); keepAwake(false); updateButtons(); }
+$('#btnStart').onclick=start;
+$('#btnReset').onclick=reset;
+$('#btnFocus').onclick=()=>{ document.body.classList.add('focus'); applyShow(); };
+$('#clockWrap').onclick=()=>{ if(document.body.classList.contains('focus')){ document.body.classList.remove('focus'); applyShow(); } };
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden && running) keepAwake(true); if(!document.hidden && ctx && ctx.state!=='running') ctx.resume(); });
+addEventListener('resize',sizeClock);
+addEventListener('orientationchange',()=>setTimeout(sizeClock,200));
+
+applyTheme(); applyShow(); updateButtons(); requestAnimationFrame(render);
+
+if('serviceWorker' in navigator && location.protocol==='https:' && !/claude|anthropic/.test(location.hostname)){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+})();
+</script>
+</body>
+</html>
