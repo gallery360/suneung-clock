@@ -202,14 +202,12 @@
 
     <h3>시험장 소리 (적응 훈련)</h3>
     <div class="list">
-      <div class="row"><label>시험장 소리 켜기<small>시험·타이머 중에 불러온 소리 파일을 틀어요</small></label><label class="sw"><input type="checkbox" id="ambOn"><span></span></label></div>
-      <div class="row snd"><label>효과음 (여러 개)<small>기침, 시험지 넘기기 같은 짧은 녹음을 가끔 하나씩 무작위로</small></label><span class="ctl"><button class="mini" id="clipLoad">불러오기</button><button class="mini" id="ambTest">▶ 듣기</button><button class="mini hide" id="clipClear">지우기</button></span><span class="fname" id="clipInfo"></span></div>
-      <div class="row"><label>얼마나 자주</label><select id="ambFreq"><option value="rare">가끔 (약 45초마다)</option><option value="normal">보통 (약 20초마다)</option><option value="often">자주 (약 8초마다)</option></select></div>
+      <div class="row"><label>시험장 소리 켜기<small>시험·타이머 중에 불러온 교실 소음을 틀어요</small></label><label class="sw"><input type="checkbox" id="ambOn"><span></span></label></div>
       <div class="row snd"><label>배경 소음 (긴 파일 1개)<small>교실 소음 녹음(10~20분 길이 추천)을 이음매 없이 계속 이어서 틀어요</small></label><span class="ctl"><button class="mini" id="ambLoad">불러오기</button><button class="mini hide" id="ambClear">지우기</button></span><span class="fname" id="ambName"></span></div>
       <div class="row"><label>앞부분 건너뛰기 (초)<small>배경 소음 파일의 앞쪽 안내 방송 부분을 빼고 틀어요</small></label><input type="number" id="ambSkip" min="0" max="3600" inputmode="numeric"></div>
       <div class="row"><label>소리 크기</label><input type="range" id="ambVol" min="0" max="1" step="0.05"></div>
     </div>
-    <p class="note">실제 녹음 소리를 넣어 쓰는 기능이에요. 효과음은 방향과 거리를 매번 다르게 해서 교실 여기저기서 나는 것처럼 틀어요. 배경 소음은 파일 안 여러 곳을 무작위로 골라 부드럽게 겹쳐 이어 붙이기 때문에 같은 부분이 똑같이 반복되는 느낌이 덜해요. 1시간이 넘는 긴 파일은 휴대폰 메모리가 부족해 안 열릴 수 있어요. 불러온 파일은 이 기기에만 저장됩니다.</p>
+    <p class="note">실제 교실 소음 녹음을 넣어 쓰는 기능이에요. 배경 소음은 파일 안 여러 곳을 무작위로 골라 부드럽게 겹쳐 이어 붙이기 때문에 같은 부분이 똑같이 반복되는 느낌이 덜해요. 1시간이 넘는 긴 파일은 휴대폰 메모리가 부족해 안 열릴 수 있어요. 불러온 파일은 이 기기에만 저장됩니다.</p>
     <h3>시계</h3>
     <div class="list">
       <div class="row"><label>초침 부드럽게<small>끄면 실제 벽시계처럼 1초씩 째깍</small></label><label class="sw"><input type="checkbox" id="smooth"><span></span></label></div>
@@ -220,7 +218,6 @@
 </div>
 <input type="file" id="filePick" accept="audio/*" class="hide">
 <input type="file" id="ambPick" accept="audio/*" class="hide">
-<input type="file" id="clipPick" accept="audio/*" multiple class="hide">
 <input type="file" id="realPick" accept=".zip,application/zip,audio/*" multiple class="hide">
 
 <script>
@@ -262,7 +259,7 @@ const DEF = {
   show:{end:true, remain:true, now:true},
   snd:{start:'chime3', m10:'none', m5:'chime4', end:'chime4'},
   voice:true, vol:0.9, smooth:false, theme:'auto', files:{}, real:[],
-  amb:{on:false, freq:'normal', vol:0.6, clips:[], skip:0, file:''}
+  amb:{on:false, vol:0.6, skip:0, file:''}
 };
 let S = load();
 function load(){
@@ -646,44 +643,13 @@ $('#tApply').onclick=()=>setTimer((parseInt($('#tH').value,10)||0)*60+(parseInt(
 $('#swApply').onclick=()=>{ setExam({name:'스톱워치', start:'00:00', dur:0, stopwatch:true}); closeSheet(); };
 
 /* ---------- 시험장 소리 (사용자 녹음 파일) ---------- */
-const AMB_MEAN={rare:45, normal:20, often:8};
-const amb={bus:null, timer:null, loop:null, loopBuf:null, clipBufs:{}, lastClip:-1};
+const amb={bus:null, loop:null, loopBuf:null};
 const R=(a,b)=>a+Math.random()*(b-a);
 function ambInit(){
   if(amb.bus) return;
   amb.bus=ctx.createGain(); amb.bus.connect(master);
-  const len=Math.floor(ctx.sampleRate*0.9), ir=ctx.createBuffer(2,len,ctx.sampleRate);
-  for(let c=0;c<2;c++){ const d=ir.getChannelData(c); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3.5); }
-  const conv=ctx.createConvolver(); conv.buffer=ir; const wet=ctx.createGain(); wet.gain.value=0.15;
-  amb.rev=ctx.createGain(); amb.rev.connect(conv); conv.connect(wet); wet.connect(amb.bus);
-}
-function ambOut(){                              // random seat position: pan + distance
-  const dist=R(0,0.8), g=ctx.createGain(); g.gain.value=1-dist*0.5;
-  const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=16000-dist*9000;
-  g.connect(lp); let last=lp;
-  if(ctx.createStereoPanner){ const pn=ctx.createStereoPanner(); pn.pan.value=R(-0.8,0.8); lp.connect(pn); last=pn; }
-  last.connect(amb.bus); last.connect(amb.rev);
-  return g;
-}
-async function clipBuf(i){
-  if(amb.clipBufs[i]) return amb.clipBufs[i];
-  try{ const ab=await idbGet('ambclip:'+i); if(ab){ amb.clipBufs[i]=await decode(ab); return amb.clipBufs[i]; } }catch(e){}
-  return null;
-}
-async function ambPlay(){
-  const n=S.amb.clips.length; if(!n) return;
-  ensureAudio(); ambInit(); amb.bus.gain.value=S.amb.vol*1.6;
-  let i=Math.floor(Math.random()*n); if(n>1 && i===amb.lastClip) i=(i+1)%n; amb.lastClip=i;
-  const b=await clipBuf(i); if(!b) return;
-  const s=ctx.createBufferSource(); s.buffer=b; s.connect(ambOut()); s.start();
 }
 const ambActive=()=>running && S.amb.on && !S.exam.stopwatch;
-function ambSchedule(){
-  clearTimeout(amb.timer); amb.timer=null;
-  if(!ambActive() || !S.amb.clips.length) return;
-  const mean=AMB_MEAN[S.amb.freq]||20, delay=(2+(-Math.log(1-Math.random()))*mean)*1000;
-  amb.timer=setTimeout(()=>{ if(ambActive() && !document.hidden) ambPlay(); ambSchedule(); }, delay);
-}
 /* 배경 소음: 파일 안에서 무작위 위치의 1~3분 조각을 골라 이어 틀고, 조각 사이를 4초 동안
    등전력 크로스페이드로 겹쳐서 이음매와 반복이 느껴지지 않게 한다. */
 const XF=4;
@@ -725,33 +691,17 @@ async function ambLoopUpdate(){
   }
   amb.loop=true; amb.loopNext=loopPiece(ctx.currentTime+0.05, true); loopQueue();
 }
-function ambUpdate(){ if(!ctx) return; ambSchedule(); ambLoopUpdate(); }
+function ambUpdate(){ if(!ctx) return; ambLoopUpdate(); }
 $('#ambOn').checked=S.amb.on; $('#ambOn').onchange=e=>{ S.amb.on=e.target.checked; save(); if(S.amb.on) ensureAudio(); ambUpdate(); };
-$('#ambFreq').value=S.amb.freq; $('#ambFreq').onchange=e=>{ S.amb.freq=e.target.value; save(); ambSchedule(); };
 $('#ambVol').value=S.amb.vol; $('#ambVol').oninput=e=>{ S.amb.vol=+e.target.value; if(amb.bus) amb.bus.gain.value=S.amb.vol*1.6; save(); };
 $('#ambSkip').value=S.amb.skip; $('#ambSkip').onchange=e=>{ S.amb.skip=Math.max(0,parseInt(e.target.value,10)||0); save(); stopLoop(); ambLoopUpdate(); };
-$('#ambTest').onclick=()=>ambPlay();
 function showAmbInfo(){
-  const n=S.amb.clips.length;
-  $('#clipInfo').textContent = n ? `🎵 ${n}개: ${S.amb.clips.slice(0,4).join(', ')}${n>4?' …':''}` : '아직 없어요';
-  $('#clipClear').classList.toggle('hide', !n); $('#ambTest').classList.toggle('hide', !n);
   $('#ambName').textContent = S.amb.file ? '🎵 '+S.amb.file : ''; $('#ambClear').classList.toggle('hide', !S.amb.file);
 }
-$('#clipLoad').onclick=()=>{ ensureAudio(); $('#clipPick').click(); };
-$('#clipPick').addEventListener('change', async e=>{
-  const fs=[...e.target.files]; e.target.value=''; if(!fs.length) return;
-  ensureAudio();
-  $('#clipInfo').textContent='불러오는 중…';
-  for(const f of fs){
-    try{ const ab=await f.arrayBuffer(); const b=await decode(ab); const i=S.amb.clips.length;
-      await idbPut('ambclip:'+i, ab); amb.clipBufs[i]=b; S.amb.clips.push(f.name.replace(/\.[^.]+$/,'').slice(0,30)); }catch(err){}
-  }
-  save(); showAmbInfo(); ambSchedule();
-});
-$('#clipClear').onclick=async()=>{
-  try{ const db=await idb(); const tx=db.transaction('files','readwrite'); S.amb.clips.forEach((_,i)=>tx.objectStore('files').delete('ambclip:'+i)); }catch(e){}
-  amb.clipBufs={}; S.amb.clips=[]; save(); showAmbInfo(); ambSchedule();
-};
+if(S.amb.clips){                                // 예전 효과음 기능에서 저장한 파일 정리
+  const n=S.amb.clips.length; delete S.amb.clips; delete S.amb.freq; save();
+  (async()=>{ try{ const db=await idb(); const tx=db.transaction('files','readwrite'); for(let i=0;i<n;i++) tx.objectStore('files').delete('ambclip:'+i); }catch(e){} })();
+}
 $('#ambLoad').onclick=()=>{ ensureAudio(); $('#ambPick').click(); };
 $('#ambPick').addEventListener('change', async e=>{
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
