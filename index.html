@@ -216,9 +216,9 @@
     <p class="note">⚠️ 아이폰 화면이 꺼지거나 다른 앱으로 넘어가면 소리가 안 날 수 있어요. 시험 중에는 이 화면을 켜 두세요 (가능한 기기에서는 자동으로 화면 꺼짐을 막아요). 무음 스위치가 켜져 있으면 일부 기기에서 소리가 안 날 수 있으니 확인해 주세요.<br>📱 설치: Safari에서 열고 공유 버튼 → <b>홈 화면에 추가</b>.</p>
   </div>
 </div>
-<input type="file" id="filePick" accept="audio/*" class="hide">
-<input type="file" id="ambPick" accept="audio/*" class="hide">
-<input type="file" id="realPick" accept=".zip,application/zip,audio/*" multiple class="hide">
+<input type="file" id="filePick" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg" class="hide">
+<input type="file" id="ambPick" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg" class="hide">
+<input type="file" id="realPick" accept=".zip,application/zip,audio/*,.mp3,.m4a,.aac,.wav" multiple class="hide">
 
 <script>
 (() => {
@@ -541,16 +541,19 @@ function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open('suneungC
   r.onupgradeneeded=()=>r.result.createObjectStore('files'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
 async function idbPut(k,v){ const db=await idb(); return new Promise((res,rej)=>{ const tx=db.transaction('files','readwrite'); tx.objectStore('files').put(v,k); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
 async function idbGet(k){ const db=await idb(); return new Promise((res,rej)=>{ const r=db.transaction('files').objectStore('files').get(k); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+function readFileAB(f){                       // FileReader fallback for iPad Safari. Never clear the <input> before reading: Safari then can't find the file.
+  return (f.arrayBuffer?f.arrayBuffer():Promise.reject()).catch(()=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(r.error); r.readAsArrayBuffer(f); }));
+}
 function decode(ab){ return new Promise((res,rej)=>{ const p=ctx.decodeAudioData(ab.slice(0),res,rej); if(p&&p.then) p.then(res,rej); }); }
 async function loadCustom(key){
   try{ const ab=await idbGet(key); if(ab){ if(!ctx) return; buffers[key]=await decode(ab); } }catch(e){}
 }
 let pickKey=null;
 $('#filePick').addEventListener('change', async ev=>{
-  const f=ev.target.files[0]; ev.target.value=''; if(!f||!pickKey) return;
+  const f=ev.target.files[0]; if(!f||!pickKey) return;
   ensureAudio();
   try{
-    const ab=await f.arrayBuffer();
+    const ab=await readFileAB(f);
     buffers[pickKey]=await decode(ab);
     try{ await idbPut(pickKey, ab); }catch(e){}
     S.files[pickKey]=f.name; S.snd[pickKey]='custom'; save(); buildSounds();
@@ -602,8 +605,8 @@ async function importBroadcast(files){
   try{
     let items=[];
     for(const f of files){
-      if(/\.zip$/i.test(f.name)) items=items.concat(await readZip(await f.arrayBuffer()));
-      else items.push({name:f.name, data:await f.arrayBuffer()});
+      if(/\.zip$/i.test(f.name)) items=items.concat(await readZip(await readFileAB(f)));
+      else items.push({name:f.name, data:await readFileAB(f)});
     }
     const keys=new Set(S.real);
     for(const it of items){ const k=parseBroadcast(it.name); if(!k) continue; await idbPut('real:'+k, it.data); delete realBuf[k]; keys.add(k); }
@@ -618,8 +621,8 @@ function showRealInfo(){
   $('#realInfo').textContent = n ? `${n}개 방송 저장됨 · ${[...new Set(S.real.map(k=>SLOTS[k.split(':')[0]]))].length}개 교시` : 'zip 파일 하나 또는 mp3 여러 개를 고르세요';
   $('#realClear').classList.toggle('hide', !n);
 }
-$('#realImport').onclick=()=>{ ensureAudio(); $('#realPick').click(); };
-$('#realPick').addEventListener('change', e=>{ const fs=[...e.target.files]; e.target.value=''; if(fs.length) importBroadcast(fs); });
+$('#realImport').onclick=()=>{ ensureAudio(); $('#realPick').value=''; $('#realPick').click(); };
+$('#realPick').addEventListener('change', e=>{ const fs=[...e.target.files]; if(fs.length) importBroadcast(fs); });
 $('#realClear').onclick=async()=>{
   try{ const db=await idb(); const tx=db.transaction('files','readwrite'); S.real.forEach(k=>tx.objectStore('files').delete('real:'+k)); }catch(e){}
   for(const k in realBuf) delete realBuf[k];
@@ -702,12 +705,19 @@ if(S.amb.clips){                                // 예전 효과음 기능에서
   const n=S.amb.clips.length; delete S.amb.clips; delete S.amb.freq; save();
   (async()=>{ try{ const db=await idb(); const tx=db.transaction('files','readwrite'); for(let i=0;i<n;i++) tx.objectStore('files').delete('ambclip:'+i); }catch(e){} })();
 }
-$('#ambLoad').onclick=()=>{ ensureAudio(); $('#ambPick').click(); };
+$('#ambLoad').onclick=()=>{ ensureAudio(); $('#ambPick').value=''; $('#ambPick').click(); };
 $('#ambPick').addEventListener('change', async e=>{
-  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  const f=e.target.files[0]; if(!f) return;
   ensureAudio();
-  try{ const ab=await f.arrayBuffer(); amb.loopBuf=await decode(ab); await idbPut('ambient', ab); S.amb.file=f.name.slice(0,60); save(); showAmbInfo(); stopLoop(); ambLoopUpdate(); }
-  catch(err){ $('#ambName').textContent='이 파일은 재생할 수 없어요'; }
+  const msg=t=>{ $('#ambName').textContent=t; };
+  msg('불러오는 중…');
+  let ab, buf;
+  try{ ab=await readFileAB(f); }
+  catch(err){ msg('파일을 읽지 못했어요. 파일 앱에서 이 파일을 먼저 기기에 내려받은 뒤(구름 아이콘이 없어야 해요) 다시 골라 주세요.'); return; }
+  try{ buf=await decode(ab); }
+  catch(err){ msg('이 파일은 재생할 수 없어요. mp3나 m4a 파일인지, 너무 길지 않은지(30분 이하 추천) 확인해 주세요.'); return; }
+  amb.loopBuf=buf; S.amb.file=f.name.slice(0,60); save(); showAmbInfo(); stopLoop(); ambLoopUpdate();
+  try{ await idbPut('ambient', ab); }catch(err){ msg('🎵 '+S.amb.file+' (기기 저장 공간이 부족해 다음 실행 때는 다시 불러와야 해요)'); }
 });
 $('#ambClear').onclick=async()=>{ try{ const db=await idb(); db.transaction('files','readwrite').objectStore('files').delete('ambient'); }catch(e){}
   amb.loopBuf=null; stopLoop(); S.amb.file=''; save(); showAmbInfo(); };
@@ -733,7 +743,7 @@ function buildSounds(){
       (S.snd[ev.key]==='custom'&&S.files[ev.key]?`<span class="fname">🎵 ${S.files[ev.key].replace(/[<>&]/g,'')}</span>`:'');
     const sel=row.querySelector('select');
     sel.onchange=()=>{
-      if(sel.value==='custom'){ pickKey=ev.key; $('#filePick').click(); sel.value=S.snd[ev.key]; return; }
+      if(sel.value==='custom'){ pickKey=ev.key; $('#filePick').value=''; $('#filePick').click(); sel.value=S.snd[ev.key]; return; }
       S.snd[ev.key]=sel.value; save(); buildSounds();
     };
     row.querySelector('button').onclick=()=>{ ensureAudio(); fire(ev.key); };
