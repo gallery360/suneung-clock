@@ -97,7 +97,8 @@
   .row:first-child{border-top:0}
   .row label{flex:1}
   .row label.sw{flex:0 0 51px}
-  .snd>label{white-space:nowrap;flex:0 0 auto}
+  .snd>label{white-space:nowrap;flex:0 1 auto;max-width:100%}
+  .snd>label small{white-space:normal}
   .row small{color:var(--sub);display:block;font-size:13px;margin-top:2px}
   .chip{border:1px solid var(--line);background:var(--chip);border-radius:18px;padding:8px 14px;font-size:16px;cursor:pointer}
   .chip.sel{background:var(--btn);color:var(--btnInk);border-color:var(--btn)}
@@ -201,15 +202,14 @@
 
     <h3>시험장 소리 (적응 훈련)</h3>
     <div class="list">
-      <div class="row"><label>시험장 소음 켜기<small>시험·타이머 중에 기침, 시험지 넘기는 소리, 의자 끄는 소리가 가끔 나요</small></label><label class="sw"><input type="checkbox" id="ambOn"><span></span></label></div>
+      <div class="row"><label>시험장 소리 켜기<small>시험·타이머 중에 불러온 소리 파일을 틀어요</small></label><label class="sw"><input type="checkbox" id="ambOn"><span></span></label></div>
+      <div class="row snd"><label>효과음 (여러 개)<small>기침, 시험지 넘기기 같은 짧은 녹음을 가끔 하나씩 무작위로</small></label><span class="ctl"><button class="mini" id="clipLoad">불러오기</button><button class="mini" id="ambTest">▶ 듣기</button><button class="mini hide" id="clipClear">지우기</button></span><span class="fname" id="clipInfo"></span></div>
       <div class="row"><label>얼마나 자주</label><select id="ambFreq"><option value="rare">가끔 (약 45초마다)</option><option value="normal">보통 (약 20초마다)</option><option value="often">자주 (약 8초마다)</option></select></div>
-      <div class="row" style="flex-wrap:wrap;gap:8px" id="ambTypes"></div>
-      <div class="row"><label>소음 크기</label><input type="range" id="ambVol" min="0" max="1" step="0.05"></div>
-      <div class="row"><label>미리 듣기</label><button class="mini" id="ambTest">▶ 아무 소리나</button></div>
-      <div class="row snd"><label>내 소음 파일<small>녹음한 시험장 소리를 계속 반복해서 틀어요</small></label><span class="ctl"><button class="mini" id="ambLoad">불러오기</button><button class="mini hide" id="ambClear">지우기</button></span><span class="fname" id="ambName"></span></div>
-      <div class="row"><label>앞부분 건너뛰기 (초)<small>파일 앞쪽 안내 방송 부분을 빼고 틀어요</small></label><input type="number" id="ambSkip" min="0" max="3600" inputmode="numeric"></div>
+      <div class="row snd"><label>배경 소음 (긴 파일 1개)<small>교실 소음 녹음을 계속 반복해서 틀어요</small></label><span class="ctl"><button class="mini" id="ambLoad">불러오기</button><button class="mini hide" id="ambClear">지우기</button></span><span class="fname" id="ambName"></span></div>
+      <div class="row"><label>앞부분 건너뛰기 (초)<small>배경 소음 파일의 앞쪽 안내 방송 부분을 빼고 틀어요</small></label><input type="number" id="ambSkip" min="0" max="3600" inputmode="numeric"></div>
+      <div class="row"><label>소리 크기</label><input type="range" id="ambVol" min="0" max="1" step="0.05"></div>
     </div>
-    <p class="note">기본 소음은 사람 목소리 없이 기침, 종이, 연필, 의자, 책상 소리만 직접 합성한 거예요. 방향과 거리가 매번 달라져서 교실 여기저기서 나는 것처럼 들려요.</p>
+    <p class="note">실제 녹음 소리를 넣어 쓰는 기능이에요. 효과음은 방향과 거리를 매번 다르게 해서 교실 여기저기서 나는 것처럼 틀어요. 불러온 파일은 이 기기에만 저장됩니다.</p>
     <h3>시계</h3>
     <div class="list">
       <div class="row"><label>초침 부드럽게<small>끄면 실제 벽시계처럼 1초씩 째깍</small></label><label class="sw"><input type="checkbox" id="smooth"><span></span></label></div>
@@ -220,6 +220,7 @@
 </div>
 <input type="file" id="filePick" accept="audio/*" class="hide">
 <input type="file" id="ambPick" accept="audio/*" class="hide">
+<input type="file" id="clipPick" accept="audio/*" multiple class="hide">
 <input type="file" id="realPick" accept=".zip,application/zip,audio/*" multiple class="hide">
 
 <script>
@@ -261,12 +262,12 @@ const DEF = {
   show:{end:true, remain:true, now:true},
   snd:{start:'chime3', m10:'none', m5:'chime4', end:'chime4'},
   voice:true, vol:0.9, smooth:false, theme:'auto', files:{}, real:[],
-  amb:{on:false, freq:'normal', vol:0.6, types:{cough:true,page:true,write:true,chair:true,desk:true}, skip:0, file:''}
+  amb:{on:false, freq:'normal', vol:0.6, clips:[], skip:0, file:''}
 };
 let S = load();
 function load(){
   try{ const o = JSON.parse(localStorage.getItem('suneungClock')||'null');
-    if(o) return Object.assign({}, DEF, {real:[]}, o, {show:Object.assign({},DEF.show,o.show), snd:Object.assign({},DEF.snd,o.snd), amb:Object.assign({},DEF.amb,o.amb,{types:Object.assign({},DEF.amb.types,(o.amb||{}).types)})});
+    if(o) return Object.assign({}, DEF, {real:[]}, o, {show:Object.assign({},DEF.show,o.show), snd:Object.assign({},DEF.snd,o.snd), amb:Object.assign({},DEF.amb,o.amb)});
   }catch(e){}
   return JSON.parse(JSON.stringify(DEF));
 }
@@ -644,139 +645,91 @@ $('#tApply').onclick=()=>setTimer((parseInt($('#tH').value,10)||0)*60+(parseInt(
 /* ---------- stopwatch ---------- */
 $('#swApply').onclick=()=>{ setExam({name:'스톱워치', start:'00:00', dur:0, stopwatch:true}); closeSheet(); };
 
-/* ---------- 시험장 소음 (합성, 사람 말소리 없음) ---------- */
-const AMB_TYPES=[['cough','기침',2],['page','시험지 넘기기',3],['write','필기',2],['chair','의자 끄는 소리',1.5],['desk','책상·연필 소리',1]];
+/* ---------- 시험장 소리 (사용자 녹음 파일) ---------- */
 const AMB_MEAN={rare:45, normal:20, often:8};
-const amb={bus:null, noise:null, timer:null, loop:null, loopBuf:null};
+const amb={bus:null, timer:null, loop:null, loopBuf:null, clipBufs:{}, lastClip:-1};
 const R=(a,b)=>a+Math.random()*(b-a);
 function ambInit(){
   if(amb.bus) return;
   amb.bus=ctx.createGain(); amb.bus.connect(master);
-  // small classroom reverb
-  const len=Math.floor(ctx.sampleRate*1.1), ir=ctx.createBuffer(2,len,ctx.sampleRate);
-  for(let c=0;c<2;c++){ const d=ir.getChannelData(c); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3.2); }
-  const conv=ctx.createConvolver(); conv.buffer=ir; const wet=ctx.createGain(); wet.gain.value=0.28;
+  const len=Math.floor(ctx.sampleRate*0.9), ir=ctx.createBuffer(2,len,ctx.sampleRate);
+  for(let c=0;c<2;c++){ const d=ir.getChannelData(c); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3.5); }
+  const conv=ctx.createConvolver(); conv.buffer=ir; const wet=ctx.createGain(); wet.gain.value=0.15;
   amb.rev=ctx.createGain(); amb.rev.connect(conv); conv.connect(wet); wet.connect(amb.bus);
-  const nl=ctx.sampleRate*3; amb.noise=ctx.createBuffer(1,nl,ctx.sampleRate); const nd=amb.noise.getChannelData(0); for(let i=0;i<nl;i++) nd[i]=Math.random()*2-1;
 }
 function ambOut(){                              // random seat position: pan + distance
-  const dist=R(0.25,1), g=ctx.createGain(); g.gain.value=1-dist*0.6;
-  const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=9000-dist*6000;
-  g.connect(lp);
-  let last=lp;
-  if(ctx.createStereoPanner){ const pn=ctx.createStereoPanner(); pn.pan.value=R(-0.9,0.9); lp.connect(pn); last=pn; }
+  const dist=R(0,0.8), g=ctx.createGain(); g.gain.value=1-dist*0.5;
+  const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=16000-dist*9000;
+  g.connect(lp); let last=lp;
+  if(ctx.createStereoPanner){ const pn=ctx.createStereoPanner(); pn.pan.value=R(-0.8,0.8); lp.connect(pn); last=pn; }
   last.connect(amb.bus); last.connect(amb.rev);
   return g;
 }
-function noiseSrc(t,dur){ const s=ctx.createBufferSource(); s.buffer=amb.noise; s.start(t, R(0,2), dur+0.05); return s; }
-function env(g,t,peak,att,dec){ g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+att); g.gain.exponentialRampToValueAtTime(0.0001,t+att+dec); }
-function sndPage(t,out){
-  const n=Math.random()<0.5?2:3;
-  for(let i=0;i<n;i++){
-    const st=t+i*R(0.07,0.16), d=R(0.12,0.28);
-    const src=noiseSrc(st,d), bp=ctx.createBiquadFilter(), g=ctx.createGain();
-    bp.type='bandpass'; bp.frequency.setValueAtTime(R(1800,3200),st); bp.frequency.linearRampToValueAtTime(R(900,1600),st+d); bp.Q.value=0.7;
-    env(g,st,R(0.25,0.5),R(0.02,0.06),d); src.connect(bp); bp.connect(g); g.connect(out);
-  }
-  for(let i=0;i<4;i++){ const st=t+R(0,0.35), src=noiseSrc(st,0.02), hp=ctx.createBiquadFilter(), g=ctx.createGain();
-    hp.type='highpass'; hp.frequency.value=3500; env(g,st,R(0.1,0.25),0.002,0.015); src.connect(hp); hp.connect(g); g.connect(out); }
-  return 0.6;
+async function clipBuf(i){
+  if(amb.clipBufs[i]) return amb.clipBufs[i];
+  try{ const ab=await idbGet('ambclip:'+i); if(ab){ amb.clipBufs[i]=await decode(ab); return amb.clipBufs[i]; } }catch(e){}
+  return null;
 }
-function sndWrite(t,out){
-  let x=t; const end=t+R(1.2,3);
-  while(x<end){ const d=R(0.05,0.18), src=noiseSrc(x,d), hp=ctx.createBiquadFilter(), bp=ctx.createBiquadFilter(), g=ctx.createGain();
-    hp.type='highpass'; hp.frequency.value=2200; bp.type='bandpass'; bp.frequency.value=R(3500,6000); bp.Q.value=1.2;
-    env(g,x,R(0.08,0.18),0.01,d); src.connect(hp); hp.connect(bp); bp.connect(g); g.connect(out); x+=d+R(0.03,0.15); }
-  return end-t;
-}
-function sndChair(t,out){
-  const d=R(0.35,0.9), src=noiseSrc(t,d), bp=ctx.createBiquadFilter(), bp2=ctx.createBiquadFilter(), g=ctx.createGain(), f0=R(260,650);
-  bp.type='bandpass'; bp.Q.value=R(6,12); bp.frequency.setValueAtTime(f0,t); bp.frequency.linearRampToValueAtTime(f0*R(0.7,1.35),t+d);
-  bp2.type='bandpass'; bp2.Q.value=8; bp2.frequency.value=f0*2.3;
-  // stick-slip juddering
-  const N=Math.floor(d*60), curve=new Float32Array(N);
-  for(let i=0;i<N;i++){ const e=Math.sin(Math.PI*i/(N-1)); curve[i]=Math.max(0.0001,e*(0.35+0.65*Math.random())*0.9); }
-  g.gain.setValueAtTime(0.0001,t); g.gain.setValueCurveAtTime(curve,t+0.001,d);
-  src.connect(bp); src.connect(bp2); bp.connect(g); bp2.connect(g);
-  const o=ctx.createOscillator(), og=ctx.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(R(90,160),t); o.frequency.linearRampToValueAtTime(R(80,190),t+d);
-  og.gain.value=0.05; o.connect(og); og.connect(bp); o.start(t); o.stop(t+d+0.05);
-  g.connect(out); return d;
-}
-function thump(t,out,f,amp){
-  const o=ctx.createOscillator(), g=ctx.createGain(); o.frequency.setValueAtTime(f,t); o.frequency.exponentialRampToValueAtTime(f*0.5,t+0.15);
-  env(g,t,amp,0.004,0.18); o.connect(g); g.connect(out); o.start(t); o.stop(t+0.25);
-  const src=noiseSrc(t,0.06), lp=ctx.createBiquadFilter(), ng=ctx.createGain(); lp.type='lowpass'; lp.frequency.value=1800; env(ng,t,amp*0.5,0.002,0.05); src.connect(lp); lp.connect(ng); ng.connect(out);
-}
-function sndDesk(t,out){
-  if(Math.random()<0.5){ thump(t,out,R(70,120),0.7); if(Math.random()<0.4) thump(t+R(0.12,0.3),out,R(70,120),0.4); return 0.5; }
-  // pencil dropped: bouncing clicks
-  let x=t, gap=R(0.12,0.18), a=0.35;
-  for(let i=0;i<5;i++){ const o=ctx.createOscillator(), g=ctx.createGain(); o.type='triangle'; o.frequency.value=R(1800,3200);
-    env(g,x,a,0.001,0.04); o.connect(g); g.connect(out); o.start(x); o.stop(x+0.06);
-    const src=noiseSrc(x,0.02), hp=ctx.createBiquadFilter(), ng=ctx.createGain(); hp.type='highpass'; hp.frequency.value=2500; env(ng,x,a*0.6,0.001,0.015); src.connect(hp); hp.connect(ng); ng.connect(out);
-    x+=gap; gap*=0.62; a*=0.6; }
-  return 0.8;
-}
-function sndCough(t,out){
-  const reps=Math.random()<0.5?1:Math.random()<0.7?2:3, F=[R(380,620),R(1000,1600),R(2200,3000)], f0=R(110,220);
-  let x=t;
-  for(let r=0;r<reps;r++){
-    const d=R(0.16,0.3)*(r?0.8:1), mix=ctx.createGain(); env(mix,x,R(0.5,0.8)*(r?0.7:1),0.012,d);
-    const src=noiseSrc(x,d+0.05), o=ctx.createOscillator(), og=ctx.createGain();
-    o.type='sawtooth'; o.frequency.setValueAtTime(f0*1.15,x); o.frequency.exponentialRampToValueAtTime(f0*0.8,x+d);
-    og.gain.setValueAtTime(0.35,x); og.gain.exponentialRampToValueAtTime(0.0001,x+d*0.6); o.connect(og);
-    F.forEach((f,i)=>{ const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f*R(0.95,1.05); bp.Q.value=i?4:2.5;
-      const fg=ctx.createGain(); fg.gain.value=[1,0.65,0.35][i]*3; src.connect(bp); og.connect(bp); bp.connect(fg); fg.connect(mix); });
-    mix.connect(out); o.start(x); o.stop(x+d+0.05);
-    x+=d+R(0.12,0.3);
-  }
-  return x-t;
-}
-const AMB_FN={cough:sndCough,page:sndPage,write:sndWrite,chair:sndChair,desk:sndDesk};
-function ambPlay(type){
-  ensureAudio(); ambInit(); amb.bus.gain.value=S.amb.vol*2.5;
-  if(!type){ const list=AMB_TYPES.filter(x=>S.amb.types[x[0]]); if(!list.length) return; let r=Math.random()*list.reduce((a,x)=>a+x[2],0); type=list.find(x=>(r-=x[2])<0)[0]; }
-  AMB_FN[type](ctx.currentTime+0.05, ambOut());
+async function ambPlay(){
+  const n=S.amb.clips.length; if(!n) return;
+  ensureAudio(); ambInit(); amb.bus.gain.value=S.amb.vol*1.6;
+  let i=Math.floor(Math.random()*n); if(n>1 && i===amb.lastClip) i=(i+1)%n; amb.lastClip=i;
+  const b=await clipBuf(i); if(!b) return;
+  const s=ctx.createBufferSource(); s.buffer=b; s.connect(ambOut()); s.start();
 }
 const ambActive=()=>running && S.amb.on && !S.exam.stopwatch;
 function ambSchedule(){
   clearTimeout(amb.timer); amb.timer=null;
-  if(!ambActive()) return;
+  if(!ambActive() || !S.amb.clips.length) return;
   const mean=AMB_MEAN[S.amb.freq]||20, delay=(2+(-Math.log(1-Math.random()))*mean)*1000;
   amb.timer=setTimeout(()=>{ if(ambActive() && !document.hidden) ambPlay(); ambSchedule(); }, delay);
 }
+function stopLoop(){ if(amb.loop){ try{amb.loop.stop();}catch(e){} amb.loop=null; } }
 async function ambLoopUpdate(){
-  const want=ambActive() && S.amb.file;
-  if(!want){ if(amb.loop){ try{amb.loop.stop();}catch(e){} amb.loop=null; } return; }
+  if(!(ambActive() && S.amb.file)){ stopLoop(); return; }
   if(amb.loop) return;
-  ambInit(); amb.bus.gain.value=S.amb.vol*2.5;
+  ambInit(); amb.bus.gain.value=S.amb.vol*1.6;
   if(!amb.loopBuf){ try{ const ab=await idbGet('ambient'); if(ab) amb.loopBuf=await decode(ab); }catch(e){} }
   if(!amb.loopBuf || amb.loop || !ambActive()) return;
   const b=amb.loopBuf, skip=Math.min(Math.max(0,+S.amb.skip||0), Math.max(0,b.duration-1));
   const s=ctx.createBufferSource(); s.buffer=b; s.loop=true; s.loopStart=skip; s.loopEnd=b.duration; s.connect(amb.bus); s.start(0, skip); amb.loop=s;
 }
 function ambUpdate(){ if(!ctx) return; ambSchedule(); ambLoopUpdate(); }
-// settings bindings
 $('#ambOn').checked=S.amb.on; $('#ambOn').onchange=e=>{ S.amb.on=e.target.checked; save(); if(S.amb.on) ensureAudio(); ambUpdate(); };
 $('#ambFreq').value=S.amb.freq; $('#ambFreq').onchange=e=>{ S.amb.freq=e.target.value; save(); ambSchedule(); };
-$('#ambVol').value=S.amb.vol; $('#ambVol').oninput=e=>{ S.amb.vol=+e.target.value; if(amb.bus) amb.bus.gain.value=S.amb.vol*2.5; save(); };
-$('#ambSkip').value=S.amb.skip; $('#ambSkip').onchange=e=>{ S.amb.skip=Math.max(0,parseInt(e.target.value,10)||0); save(); if(amb.loop){ try{amb.loop.stop();}catch(x){} amb.loop=null; } ambLoopUpdate(); };
+$('#ambVol').value=S.amb.vol; $('#ambVol').oninput=e=>{ S.amb.vol=+e.target.value; if(amb.bus) amb.bus.gain.value=S.amb.vol*1.6; save(); };
+$('#ambSkip').value=S.amb.skip; $('#ambSkip').onchange=e=>{ S.amb.skip=Math.max(0,parseInt(e.target.value,10)||0); save(); stopLoop(); ambLoopUpdate(); };
 $('#ambTest').onclick=()=>ambPlay();
-function buildAmbTypes(){
-  const box=$('#ambTypes'); box.innerHTML='';
-  AMB_TYPES.forEach(([k,l])=>{ const b=document.createElement('button'); b.className='chip'+(S.amb.types[k]?' sel':''); b.textContent=l;
-    b.onclick=()=>{ S.amb.types[k]=!S.amb.types[k]; save(); buildAmbTypes(); if(S.amb.types[k]) ambPlay(k); }; box.appendChild(b); });
+function showAmbInfo(){
+  const n=S.amb.clips.length;
+  $('#clipInfo').textContent = n ? `🎵 ${n}개: ${S.amb.clips.slice(0,4).join(', ')}${n>4?' …':''}` : '아직 없어요';
+  $('#clipClear').classList.toggle('hide', !n); $('#ambTest').classList.toggle('hide', !n);
   $('#ambName').textContent = S.amb.file ? '🎵 '+S.amb.file : ''; $('#ambClear').classList.toggle('hide', !S.amb.file);
 }
+$('#clipLoad').onclick=()=>{ ensureAudio(); $('#clipPick').click(); };
+$('#clipPick').addEventListener('change', async e=>{
+  const fs=[...e.target.files]; e.target.value=''; if(!fs.length) return;
+  ensureAudio();
+  $('#clipInfo').textContent='불러오는 중…';
+  for(const f of fs){
+    try{ const ab=await f.arrayBuffer(); const b=await decode(ab); const i=S.amb.clips.length;
+      await idbPut('ambclip:'+i, ab); amb.clipBufs[i]=b; S.amb.clips.push(f.name.replace(/\.[^.]+$/,'').slice(0,30)); }catch(err){}
+  }
+  save(); showAmbInfo(); ambSchedule();
+});
+$('#clipClear').onclick=async()=>{
+  try{ const db=await idb(); const tx=db.transaction('files','readwrite'); S.amb.clips.forEach((_,i)=>tx.objectStore('files').delete('ambclip:'+i)); }catch(e){}
+  amb.clipBufs={}; S.amb.clips=[]; save(); showAmbInfo(); ambSchedule();
+};
 $('#ambLoad').onclick=()=>{ ensureAudio(); $('#ambPick').click(); };
 $('#ambPick').addEventListener('change', async e=>{
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
-  try{ const ab=await f.arrayBuffer(); amb.loopBuf=await decode(ab); await idbPut('ambient', ab); S.amb.file=f.name.slice(0,60); save(); buildAmbTypes();
-    if(amb.loop){ try{amb.loop.stop();}catch(x){} amb.loop=null; } ambLoopUpdate(); }
+  ensureAudio();
+  try{ const ab=await f.arrayBuffer(); amb.loopBuf=await decode(ab); await idbPut('ambient', ab); S.amb.file=f.name.slice(0,60); save(); showAmbInfo(); stopLoop(); ambLoopUpdate(); }
   catch(err){ $('#ambName').textContent='이 파일은 재생할 수 없어요'; }
 });
 $('#ambClear').onclick=async()=>{ try{ const db=await idb(); db.transaction('files','readwrite').objectStore('files').delete('ambient'); }catch(e){}
-  amb.loopBuf=null; if(amb.loop){ try{amb.loop.stop();}catch(x){} amb.loop=null; } S.amb.file=''; save(); buildAmbTypes(); };
+  amb.loopBuf=null; stopLoop(); S.amb.file=''; save(); showAmbInfo(); };
 
 /* ---------- settings UI ---------- */
 function buildPresets(){
@@ -807,7 +760,7 @@ function buildSounds(){
   });
 }
 function openSheet(pg){ $('#pgExam').classList.toggle('hide',pg!=='exam'); $('#pgSet').classList.toggle('hide',pg!=='set');
-  if(pg==='exam') { buildPresets(); buildTimerChips(); } else { buildSounds(); showRealInfo(); buildAmbTypes(); }
+  if(pg==='exam') { buildPresets(); buildTimerChips(); } else { buildSounds(); showRealInfo(); showAmbInfo(); }
   document.body.classList.add('open'); $('#sheet').scrollTop=0; }
 function closeSheet(){ document.body.classList.remove('open'); }
 $('#sheetBg').onclick=closeSheet; $$('[data-close]').forEach(b=>b.onclick=closeSheet);
